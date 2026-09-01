@@ -10,7 +10,6 @@ const STORAGE_KEY = 'ivan-meal-ledger-v1'
 
 const icons = {
   calendar: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /></svg>,
-  page: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6V3Zm8 0v5h4" /></svg>,
   hash: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-2 18M17 3l-2 18M4 9h16M3 15h16" /></svg>,
   download: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 18v2h14v-2" /></svg>,
   upload: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0 4 4m-4-4-4 4M5 18v2h14v-2" /></svg>,
@@ -79,7 +78,7 @@ function App() {
   const amountPreview = useMemo(() => {
     const parsed = Number(amount)
     if (!Number.isFinite(parsed) || parsed <= 0) return null
-    return Math.round((type === 'expense' ? parsed / 2 : parsed) * 100) / 100
+    return Math.round(type === 'expense' ? parsed / 2 : parsed)
   }, [amount, type])
   const balancePreview = totals.balance + (amountPreview === null ? 0 : type === 'income' ? amountPreview : -amountPreview)
 
@@ -103,12 +102,12 @@ function App() {
     const parsedAmount = Number(amount)
     if (!name.trim()) return showMessage('请填写名称')
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return showMessage('请输入正确的金额')
-    const recordedAmount = type === 'expense' ? parsedAmount / 2 : parsedAmount
+    const recordedAmount = Math.round(type === 'expense' ? parsedAmount / 2 : parsedAmount)
     const next: LedgerEntry = {
       id: crypto.randomUUID(),
       date: todayISO(),
       name: name.trim(),
-      amount: Math.round(recordedAmount * 100) / 100,
+      amount: recordedAmount,
       type,
       createdAt: new Date().toISOString(),
     }
@@ -147,10 +146,7 @@ function App() {
 
   return (
     <main className="app-shell">
-      <header className="page-header">
-        <div><p className="eyebrow">IVAN'S MEAL FUND</p><h1>饭钱账本</h1><p className="subtitle">像 Notion 数据库一样记账，日期与余额自动完成。</p></div>
-        <div className="local-status"><span /> 本机保存</div>
-      </header>
+      <header className="page-header"><h1>饭钱账本</h1></header>
 
       <section className="summary-strip" aria-label="账本汇总">
         <div className="balance-summary"><span>当前余额</span><strong className={totals.balance < 0 ? 'negative' : ''}>{money(totals.balance)}</strong></div>
@@ -170,7 +166,7 @@ function App() {
           <div className="ledger-table" role="table" aria-label="饭钱记录">
             <div className="ledger-head" role="row">
               <span role="columnheader">{icons.calendar} Date</span>
-              <span role="columnheader">{icons.page} Name</span>
+              <span role="columnheader">Name</span>
               <span role="columnheader">{icons.hash} 花费</span>
               <span role="columnheader">{icons.hash} 充值</span>
               <span role="columnheader">{icons.hash} 余额</span>
@@ -179,7 +175,7 @@ function App() {
 
             <form className="ledger-new-row" onSubmit={addEntry} aria-label="新增记录">
               <div className="date-cell today">{icons.calendar}<time dateTime={todayISO()}>{dateColumnLabel(todayISO())}</time></div>
-              <label className="name-cell"><span className="sr-only">名称</span>{icons.page}<input value={name} onChange={(event) => handleName(event.target.value)} placeholder="输入名称" autoComplete="off" /></label>
+              <label className="name-cell"><span className="sr-only">名称</span><input value={name} onChange={(event) => handleName(event.target.value)} placeholder="输入名称" autoComplete="off" /></label>
               <div className={`amount-cell ${type === 'expense' ? 'active expense' : ''}`}>
                 {type === 'expense' ? <><span>¥</span><input aria-label="花费总金额" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="总金额" inputMode="decimal" />{amountPreview !== null && <small>入账 {money(amountPreview)}</small>}</> : <button type="button" onClick={() => { setType('expense'); setAmount('') }}>＋ 记花费</button>}
               </div>
@@ -193,7 +189,7 @@ function App() {
             {visibleRows.length ? <div className="ledger-body">{visibleRows.map((entry) => (
               <div className="ledger-row" role="row" key={entry.id}>
                 <div className="date-cell"><time dateTime={entry.date}>{dateColumnLabel(entry.date)}</time></div>
-                <div className="name-cell">{icons.page}<strong>{entry.name}</strong></div>
+                <div className="name-cell"><strong>{entry.name}</strong></div>
                 <div className="number-cell expense">{entry.type === 'expense' ? money(entry.amount) : ''}</div>
                 <div className="number-cell income">{entry.type === 'income' ? money(entry.amount) : ''}</div>
                 <div className={`balance-cell ${entry.balance < 0 ? 'negative' : ''}`}>{money(entry.balance)}</div>
