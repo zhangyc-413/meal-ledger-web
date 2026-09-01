@@ -4,11 +4,14 @@ import './App.css'
 
 type EntryType = 'expense' | 'income'
 type LedgerEntry = { id: string; date: string; name: string; amount: number; type: EntryType; createdAt: string }
+type LedgerRow = LedgerEntry & { balance: number }
+
 const STORAGE_KEY = 'ivan-meal-ledger-v1'
 
 const icons = {
-  arrowDown: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v14m0 0 6-6m-6 6-6-6" /></svg>,
-  arrowUp: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V6m0 0 6 6m-6-6-6 6" /></svg>,
+  calendar: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /></svg>,
+  page: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6V3Zm8 0v5h4" /></svg>,
+  hash: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-2 18M17 3l-2 18M4 9h16M3 15h16" /></svg>,
   download: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 18v2h14v-2" /></svg>,
   upload: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0 4 4m-4-4-4 4M5 18v2h14v-2" /></svg>,
   trash: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" /></svg>,
@@ -20,10 +23,20 @@ function todayISO() {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
 }
 
+function isLedgerEntry(value: unknown): value is LedgerEntry {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Partial<LedgerEntry>
+  return Boolean(typeof item.id === 'string' && typeof item.date === 'string' && typeof item.name === 'string' && typeof item.amount === 'number' && (item.type === 'expense' || item.type === 'income'))
+}
+
 function loadEntries(): LedgerEntry[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-    return Array.isArray(parsed) ? parsed : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(isLedgerEntry).map((entry, index) => ({
+      ...entry,
+      createdAt: typeof entry.createdAt === 'string' ? entry.createdAt : `${entry.date}T12:00:${String(index).padStart(2, '0')}`,
+    }))
   } catch { return [] }
 }
 
@@ -31,18 +44,8 @@ function money(value: number) {
   return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: Number.isInteger(value) ? 0 : 2 }).format(value)
 }
 
-function dateLabel(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric', weekday: 'short' }).format(new Date(`${value}T00:00:00`))
-}
-
 function dateColumnLabel(value: string) {
   return value.replaceAll('-', '/')
-}
-
-function isLedgerEntry(value: unknown): value is LedgerEntry {
-  if (!value || typeof value !== 'object') return false
-  const item = value as Partial<LedgerEntry>
-  return Boolean(typeof item.id === 'string' && typeof item.date === 'string' && typeof item.name === 'string' && typeof item.amount === 'number' && (item.type === 'expense' || item.type === 'income'))
 }
 
 function App() {
@@ -61,12 +64,24 @@ function App() {
     return result
   }, { income: 0, expense: 0, balance: 0 }), [entries])
 
-  const visibleEntries = useMemo(() => [...entries].filter((entry) => filter === 'all' || entry.type === filter).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [entries, filter])
+  const rows = useMemo<LedgerRow[]>(() => {
+    let balance = 0
+    return [...entries]
+      .sort((a, b) => (a.createdAt || a.date).localeCompare(b.createdAt || b.date))
+      .map((entry) => {
+        balance += entry.type === 'income' ? entry.amount : -entry.amount
+        return { ...entry, balance }
+      })
+      .reverse()
+  }, [entries])
+
+  const visibleRows = useMemo(() => rows.filter((entry) => filter === 'all' || entry.type === filter), [rows, filter])
   const amountPreview = useMemo(() => {
     const parsed = Number(amount)
     if (!Number.isFinite(parsed) || parsed <= 0) return null
-    return type === 'expense' ? Math.round((parsed / 2) * 100) / 100 : Math.round(parsed * 100) / 100
+    return Math.round((type === 'expense' ? parsed / 2 : parsed) * 100) / 100
   }, [amount, type])
+  const balancePreview = totals.balance + (amountPreview === null ? 0 : type === 'income' ? amountPreview : -amountPreview)
 
   function persist(next: LedgerEntry[]) {
     setEntries(next)
@@ -89,10 +104,17 @@ function App() {
     if (!name.trim()) return showMessage('请填写名称')
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return showMessage('请输入正确的金额')
     const recordedAmount = type === 'expense' ? parsedAmount / 2 : parsedAmount
-    const next: LedgerEntry = { id: crypto.randomUUID(), date: todayISO(), name: name.trim(), amount: Math.round(recordedAmount * 100) / 100, type, createdAt: new Date().toISOString() }
+    const next: LedgerEntry = {
+      id: crypto.randomUUID(),
+      date: todayISO(),
+      name: name.trim(),
+      amount: Math.round(recordedAmount * 100) / 100,
+      type,
+      createdAt: new Date().toISOString(),
+    }
     persist([...entries, next])
     setName(''); setAmount(''); setType('expense')
-    showMessage(type === 'expense' ? `${dateLabel(next.date)} · 已按一半记录 ${money(next.amount)}` : `${dateLabel(next.date)} · 已充值 ${money(next.amount)}`)
+    showMessage(type === 'expense' ? `已自动平分，扣除 ${money(next.amount)}` : `已充值 ${money(next.amount)}`)
   }
 
   function removeEntry(id: string) {
@@ -125,44 +147,72 @@ function App() {
 
   return (
     <main className="app-shell">
-      <header className="topbar"><div><p className="eyebrow">IVAN'S MEAL FUND</p><h1>饭钱</h1></div><div className="privacy-dot" title="数据保存在当前设备"><span /> 本机保存</div></header>
+      <header className="page-header">
+        <div><p className="eyebrow">IVAN'S MEAL FUND</p><h1>饭钱账本</h1><p className="subtitle">像 Notion 数据库一样记账，日期与余额自动完成。</p></div>
+        <div className="local-status"><span /> 本机保存</div>
+      </header>
 
-      <section className={`balance-card ${totals.balance < 0 ? 'negative' : ''}`}>
-        <p>当前余额</p><strong>{money(totals.balance)}</strong>
-        <div className="summary-row">
-          <div><span className="summary-icon expense">{icons.arrowDown}</span><span><small>累计花费</small>{money(totals.expense)}</span></div>
-          <div><span className="summary-icon income">{icons.arrowUp}</span><span><small>累计充值</small>{money(totals.income)}</span></div>
-        </div>
+      <section className="summary-strip" aria-label="账本汇总">
+        <div className="balance-summary"><span>当前余额</span><strong className={totals.balance < 0 ? 'negative' : ''}>{money(totals.balance)}</strong></div>
+        <div><span>累计花费</span><strong>{money(totals.expense)}</strong></div>
+        <div><span>累计充值</span><strong>{money(totals.income)}</strong></div>
+        <div><span>记录数量</span><strong>{entries.length} 笔</strong></div>
       </section>
 
-      <section className="entry-card" aria-labelledby="add-title">
-        <div className="section-heading">
-          <div><p className="section-kicker">{dateLabel(todayISO())}</p><h2 id="add-title">记一笔</h2></div>
-          <div className="type-switch" aria-label="收支类型"><button className={type === 'expense' ? 'active' : ''} onClick={() => setType('expense')} type="button">花费</button><button className={type === 'income' ? 'active income' : ''} onClick={() => setType('income')} type="button">充值</button></div>
+      <section className="database-section" aria-labelledby="database-title">
+        <div className="database-toolbar">
+          <div><p className="view-label">Table</p><h2 id="database-title">全部记录</h2></div>
+          <div className="filter-tabs"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>全部</button><button className={filter === 'expense' ? 'active' : ''} onClick={() => setFilter('expense')}>花费</button><button className={filter === 'income' ? 'active' : ''} onClick={() => setFilter('income')}>充值</button></div>
         </div>
-        <form onSubmit={addEntry}>
-          <label><span>名称</span><input value={name} onChange={(event) => handleName(event.target.value)} placeholder="例如：午饭" autoComplete="off" /></label>
-          <label><span>{type === 'expense' ? '消费总金额' : '充值金额'}</span><div className="money-input"><b>¥</b><input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0" inputMode="decimal" /></div></label>
-          <button className="submit-button" type="submit">{icons.plus}<span>保存记录</span></button>
-        </form>
-        <div className="entry-notes">
-          <p className="date-note">保存时自动固定今天的日期，无需选择。</p>
-          {amountPreview !== null && <p className={`amount-preview ${type}`}><span>{type === 'expense' ? '两人平分，实际入账' : '实际入账'}</span><strong>{money(amountPreview)}</strong></p>}
-        </div>
-      </section>
 
-      <section className="history-section" aria-labelledby="history-title">
-        <div className="history-header"><div><p className="section-kicker">共 {entries.length} 笔</p><h2 id="history-title">记录</h2></div><div className="filter-tabs"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>全部</button><button className={filter === 'expense' ? 'active' : ''} onClick={() => setFilter('expense')}>花费</button><button className={filter === 'income' ? 'active' : ''} onClick={() => setFilter('income')}>充值</button></div></div>
-        {visibleEntries.length ? <><div className="entry-columns" aria-hidden="true"><span>日期</span><span>名称</span><span>金额</span><span /></div><ol className="entry-list">{visibleEntries.map((entry) => <li key={entry.id}><div className={`entry-mark ${entry.type}`} /><time dateTime={entry.date}>{dateColumnLabel(entry.date)}</time><div className="entry-copy"><strong>{entry.name}</strong></div><b className={entry.type}>{entry.type === 'income' ? '+' : '−'}{money(entry.amount)}</b><button className="delete-button" onClick={() => removeEntry(entry.id)} aria-label={`删除 ${entry.name}`}>{icons.trash}</button></li>)}</ol></> : <div className="empty-state"><div className="empty-coin">¥</div><h3>{entries.length ? '没有符合条件的记录' : '从今天开始记饭钱'}</h3><p>{entries.length ? '切换上方筛选查看其他记录。' : '填写名称和金额，日期与余额会自动处理。'}</p></div>}
+        <p className="mobile-hint">表格可以左右滑动查看完整内容</p>
+        <div className="table-scroll">
+          <div className="ledger-table" role="table" aria-label="饭钱记录">
+            <div className="ledger-head" role="row">
+              <span role="columnheader">{icons.calendar} Date</span>
+              <span role="columnheader">{icons.page} Name</span>
+              <span role="columnheader">{icons.hash} 花费</span>
+              <span role="columnheader">{icons.hash} 充值</span>
+              <span role="columnheader">{icons.hash} 余额</span>
+              <span aria-hidden="true" />
+            </div>
+
+            <form className="ledger-new-row" onSubmit={addEntry} aria-label="新增记录">
+              <div className="date-cell today">{icons.calendar}<time dateTime={todayISO()}>{dateColumnLabel(todayISO())}</time></div>
+              <label className="name-cell"><span className="sr-only">名称</span>{icons.page}<input value={name} onChange={(event) => handleName(event.target.value)} placeholder="输入名称" autoComplete="off" /></label>
+              <div className={`amount-cell ${type === 'expense' ? 'active expense' : ''}`}>
+                {type === 'expense' ? <><span>¥</span><input aria-label="花费总金额" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="总金额" inputMode="decimal" />{amountPreview !== null && <small>入账 {money(amountPreview)}</small>}</> : <button type="button" onClick={() => { setType('expense'); setAmount('') }}>＋ 记花费</button>}
+              </div>
+              <div className={`amount-cell ${type === 'income' ? 'active income' : ''}`}>
+                {type === 'income' ? <><span>¥</span><input aria-label="充值金额" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="金额" inputMode="decimal" />{amountPreview !== null && <small>入账 {money(amountPreview)}</small>}</> : <button type="button" onClick={() => { setType('income'); setAmount('') }}>＋ 记充值</button>}
+              </div>
+              <div className={`balance-cell preview ${balancePreview < 0 ? 'negative' : ''}`}>{money(balancePreview)}</div>
+              <button className="save-row" type="submit" aria-label="保存记录">{icons.plus}</button>
+            </form>
+
+            <div className="split-note"><span>新增花费输入两人的总金额，保存时自动 ÷ 2；充值按原金额入账。</span></div>
+
+            {visibleRows.length ? <div className="ledger-body">{visibleRows.map((entry) => (
+              <div className="ledger-row" role="row" key={entry.id}>
+                <div className="date-cell"><time dateTime={entry.date}>{dateColumnLabel(entry.date)}</time></div>
+                <div className="name-cell">{icons.page}<strong>{entry.name}</strong></div>
+                <div className="number-cell expense">{entry.type === 'expense' ? money(entry.amount) : ''}</div>
+                <div className="number-cell income">{entry.type === 'income' ? money(entry.amount) : ''}</div>
+                <div className={`balance-cell ${entry.balance < 0 ? 'negative' : ''}`}>{money(entry.balance)}</div>
+                <button className="delete-button" onClick={() => removeEntry(entry.id)} aria-label={`删除 ${entry.name}`}>{icons.trash}</button>
+              </div>
+            ))}</div> : <div className="empty-row">没有符合条件的记录</div>}
+          </div>
+        </div>
       </section>
 
       <section className="data-tools">
-        <div><p className="section-kicker">数据管理</p><h2>备份与恢复</h2><p>记录只保存在这个浏览器。换设备前请先导出备份。</p></div>
+        <div><p className="eyebrow">数据管理</p><h2>备份与恢复</h2><p>记录只保存在这个浏览器。换设备前请先导出备份。</p></div>
         <div className="tool-buttons"><button onClick={exportBackup} disabled={!entries.length}>{icons.download}<span>导出备份</span></button><button onClick={() => fileInput.current?.click()}>{icons.upload}<span>导入备份</span></button><button className="danger" onClick={clearAll} disabled={!entries.length}>{icons.trash}<span>清空</span></button></div>
         <input ref={fileInput} type="file" accept="application/json,.json" onChange={importBackup} hidden />
       </section>
 
-      <footer>不上传账目 · 不需要账号 · 可添加到主屏幕</footer>
+      <footer>自动日期 · 自动平分花费 · 自动计算余额</footer>
       {message && <div className="toast" role="status">{message}</div>}
     </main>
   )
