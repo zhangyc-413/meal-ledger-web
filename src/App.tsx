@@ -35,6 +35,10 @@ function dateLabel(value: string) {
   return new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric', weekday: 'short' }).format(new Date(`${value}T00:00:00`))
 }
 
+function dateColumnLabel(value: string) {
+  return value.replaceAll('-', '/')
+}
+
 function isLedgerEntry(value: unknown): value is LedgerEntry {
   if (!value || typeof value !== 'object') return false
   const item = value as Partial<LedgerEntry>
@@ -58,6 +62,11 @@ function App() {
   }, { income: 0, expense: 0, balance: 0 }), [entries])
 
   const visibleEntries = useMemo(() => [...entries].filter((entry) => filter === 'all' || entry.type === filter).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [entries, filter])
+  const amountPreview = useMemo(() => {
+    const parsed = Number(amount)
+    if (!Number.isFinite(parsed) || parsed <= 0) return null
+    return type === 'expense' ? Math.round((parsed / 2) * 100) / 100 : Math.round(parsed * 100) / 100
+  }, [amount, type])
 
   function persist(next: LedgerEntry[]) {
     setEntries(next)
@@ -79,10 +88,11 @@ function App() {
     const parsedAmount = Number(amount)
     if (!name.trim()) return showMessage('请填写名称')
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return showMessage('请输入正确的金额')
-    const next: LedgerEntry = { id: crypto.randomUUID(), date: todayISO(), name: name.trim(), amount: Math.round(parsedAmount * 100) / 100, type, createdAt: new Date().toISOString() }
+    const recordedAmount = type === 'expense' ? parsedAmount / 2 : parsedAmount
+    const next: LedgerEntry = { id: crypto.randomUUID(), date: todayISO(), name: name.trim(), amount: Math.round(recordedAmount * 100) / 100, type, createdAt: new Date().toISOString() }
     persist([...entries, next])
     setName(''); setAmount(''); setType('expense')
-    showMessage(`${dateLabel(next.date)} · 已记录`)
+    showMessage(type === 'expense' ? `${dateLabel(next.date)} · 已按一半记录 ${money(next.amount)}` : `${dateLabel(next.date)} · 已充值 ${money(next.amount)}`)
   }
 
   function removeEntry(id: string) {
@@ -132,15 +142,18 @@ function App() {
         </div>
         <form onSubmit={addEntry}>
           <label><span>名称</span><input value={name} onChange={(event) => handleName(event.target.value)} placeholder="例如：午饭" autoComplete="off" /></label>
-          <label><span>金额</span><div className="money-input"><b>¥</b><input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0" inputMode="decimal" /></div></label>
+          <label><span>{type === 'expense' ? '消费总金额' : '充值金额'}</span><div className="money-input"><b>¥</b><input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0" inputMode="decimal" /></div></label>
           <button className="submit-button" type="submit">{icons.plus}<span>保存记录</span></button>
         </form>
-        <p className="date-note">保存时自动固定今天的日期，无需选择。</p>
+        <div className="entry-notes">
+          <p className="date-note">保存时自动固定今天的日期，无需选择。</p>
+          {amountPreview !== null && <p className={`amount-preview ${type}`}><span>{type === 'expense' ? '两人平分，实际入账' : '实际入账'}</span><strong>{money(amountPreview)}</strong></p>}
+        </div>
       </section>
 
       <section className="history-section" aria-labelledby="history-title">
         <div className="history-header"><div><p className="section-kicker">共 {entries.length} 笔</p><h2 id="history-title">记录</h2></div><div className="filter-tabs"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>全部</button><button className={filter === 'expense' ? 'active' : ''} onClick={() => setFilter('expense')}>花费</button><button className={filter === 'income' ? 'active' : ''} onClick={() => setFilter('income')}>充值</button></div></div>
-        {visibleEntries.length ? <ol className="entry-list">{visibleEntries.map((entry) => <li key={entry.id}><div className={`entry-mark ${entry.type}`} /><div className="entry-copy"><strong>{entry.name}</strong><span>{dateLabel(entry.date)}</span></div><b className={entry.type}>{entry.type === 'income' ? '+' : '−'}{money(entry.amount)}</b><button className="delete-button" onClick={() => removeEntry(entry.id)} aria-label={`删除 ${entry.name}`}>{icons.trash}</button></li>)}</ol> : <div className="empty-state"><div className="empty-coin">¥</div><h3>{entries.length ? '没有符合条件的记录' : '从今天开始记饭钱'}</h3><p>{entries.length ? '切换上方筛选查看其他记录。' : '填写名称和金额，日期与余额会自动处理。'}</p></div>}
+        {visibleEntries.length ? <><div className="entry-columns" aria-hidden="true"><span>日期</span><span>名称</span><span>金额</span><span /></div><ol className="entry-list">{visibleEntries.map((entry) => <li key={entry.id}><div className={`entry-mark ${entry.type}`} /><time dateTime={entry.date}>{dateColumnLabel(entry.date)}</time><div className="entry-copy"><strong>{entry.name}</strong></div><b className={entry.type}>{entry.type === 'income' ? '+' : '−'}{money(entry.amount)}</b><button className="delete-button" onClick={() => removeEntry(entry.id)} aria-label={`删除 ${entry.name}`}>{icons.trash}</button></li>)}</ol></> : <div className="empty-state"><div className="empty-coin">¥</div><h3>{entries.length ? '没有符合条件的记录' : '从今天开始记饭钱'}</h3><p>{entries.length ? '切换上方筛选查看其他记录。' : '填写名称和金额，日期与余额会自动处理。'}</p></div>}
       </section>
 
       <section className="data-tools">
