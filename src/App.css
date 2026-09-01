@@ -62,7 +62,6 @@ h1, h2, p { margin-top: 0; } h1 { margin-bottom: 8px; font-size: clamp(34px, 7vw
 .save-row:hover { background: #46624d; }
 .delete-button { color: #aaa79f; }
 .delete-button:hover { color: #a64d44; background: #f8ebe8; }
-.split-note { min-height: 32px; display: flex; align-items: center; padding: 0 14px; border-top: 1px solid #e1ded6; color: #706d66; background: #f7f5f0; font-size: 10px; }
 .ledger-row:hover { background: #faf9f6; }
 .empty-row { padding: 36px 16px; border-top: 1px solid #e1ded6; color: #77746d; text-align: center; font-size: 13px; }
 

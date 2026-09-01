@@ -190,8 +190,6 @@ function App() {
               <button className="save-row" type="submit" aria-label="保存记录">{icons.plus}</button>
             </form>
 
-            <div className="split-note"><span>新增花费输入两人的总金额，保存时自动 ÷ 2；充值按原金额入账。</span></div>
-
             {visibleRows.length ? <div className="ledger-body">{visibleRows.map((entry) => (
               <div className="ledger-row" role="row" key={entry.id}>
                 <div className="date-cell"><time dateTime={entry.date}>{dateColumnLabel(entry.date)}</time></div>
