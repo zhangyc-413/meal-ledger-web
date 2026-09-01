@@ -1,0 +1,10 @@
+{
+  "name": "饭钱 · 私密记账",
+  "short_name": "饭钱",
+  "description": "自动记录日期并计算余额的饭钱记账工具",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f1ea",
+  "theme_color": "#282824",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
