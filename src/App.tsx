@@ -43,12 +43,9 @@ function money(value: number) {
   return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: Number.isInteger(value) ? 0 : 2 }).format(value)
 }
 
-function dateColumnLabel(value: string) {
-  return value.replaceAll('-', '/')
-}
-
 function App() {
   const [entries, setEntries] = useState<LedgerEntry[]>(loadEntries)
+  const [entryDate, setEntryDate] = useState(todayISO)
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [type, setType] = useState<EntryType>('expense')
@@ -105,7 +102,7 @@ function App() {
     const recordedAmount = Math.round(type === 'expense' ? parsedAmount / 2 : parsedAmount)
     const next: LedgerEntry = {
       id: crypto.randomUUID(),
-      date: todayISO(),
+      date: entryDate,
       name: name.trim(),
       amount: recordedAmount,
       type,
@@ -118,6 +115,12 @@ function App() {
 
   function removeEntry(id: string) {
     if (window.confirm('删除这条记录？')) persist(entries.filter((entry) => entry.id !== id))
+  }
+
+  function updateEntryDate(id: string, date: string) {
+    if (!date) return
+    persist(entries.map((entry) => entry.id === id ? { ...entry, date } : entry))
+    showMessage('日期已更新')
   }
 
   function exportBackup() {
@@ -174,7 +177,11 @@ function App() {
             </div>
 
             <form className="ledger-new-row" onSubmit={addEntry} aria-label="新增记录">
-              <div className="date-cell today">{icons.calendar}<time dateTime={todayISO()}>{dateColumnLabel(todayISO())}</time></div>
+              <label className="date-cell date-editor new-date-editor">
+                <span className="sr-only">记录日期</span>
+                {icons.calendar}
+                <input type="date" value={entryDate} onChange={(event) => setEntryDate(event.target.value)} required />
+              </label>
               <label className="name-cell"><span className="sr-only">名称</span><input value={name} onChange={(event) => handleName(event.target.value)} placeholder="输入名称" autoComplete="off" /></label>
               <div className={`amount-cell ${type === 'expense' ? 'active expense' : ''}`}>
                 {type === 'expense' ? <><span>¥</span><input aria-label="花费总金额" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="总金额" inputMode="decimal" />{amountPreview !== null && <small>入账 {money(amountPreview)}</small>}</> : <button type="button" onClick={() => { setType('expense'); setAmount('') }}>＋ 记花费</button>}
@@ -188,7 +195,10 @@ function App() {
 
             {visibleRows.length ? <div className="ledger-body">{visibleRows.map((entry) => (
               <div className="ledger-row" role="row" key={entry.id}>
-                <div className="date-cell"><time dateTime={entry.date}>{dateColumnLabel(entry.date)}</time></div>
+                <label className="date-cell date-editor">
+                  <span className="sr-only">修改 {entry.name} 的日期</span>
+                  <input type="date" value={entry.date} onChange={(event) => updateEntryDate(entry.id, event.target.value)} required />
+                </label>
                 <div className="name-cell"><strong>{entry.name}</strong></div>
                 <div className="number-cell expense">{entry.type === 'expense' ? money(entry.amount) : ''}</div>
                 <div className="number-cell income">{entry.type === 'income' ? money(entry.amount) : ''}</div>
@@ -206,7 +216,7 @@ function App() {
         <input ref={fileInput} type="file" accept="application/json,.json" onChange={importBackup} hidden />
       </section>
 
-      <footer>自动日期 · 自动平分花费 · 自动计算余额</footer>
+      <footer>日期可调整 · 自动平分花费 · 自动计算余额</footer>
       {message && <div className="toast" role="status">{message}</div>}
     </main>
   )

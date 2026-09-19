@@ -1,7 +1,7 @@
 {
   "name": "饭钱记账",
   "short_name": "饭钱记账",
-  "description": "自动记录日期并计算余额的饭钱记账工具",
+  "description": "日期可调整并自动计算余额的饭钱记账工具",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f3f1ea",
