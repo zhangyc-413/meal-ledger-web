@@ -61,13 +61,14 @@ function App() {
   }, { income: 0, expense: 0, balance: 0 }), [entries])
 
   const rows = useMemo<LedgerRow[]>(() => {
-    let balance = 0
     return [...entries]
-      .sort((a, b) => (a.createdAt || a.date).localeCompare(b.createdAt || b.date))
-      .map((entry) => {
-        balance += entry.type === 'income' ? entry.amount : -entry.amount
-        return { ...entry, balance }
-      })
+      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt))
+      .reduce<LedgerRow[]>((result, entry) => {
+        const previousBalance = result.at(-1)?.balance ?? 0
+        const balance = previousBalance + (entry.type === 'income' ? entry.amount : -entry.amount)
+        result.push({ ...entry, balance })
+        return result
+      }, [])
       .reverse()
   }, [entries])
 
