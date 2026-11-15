@@ -1,9 +1,9 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import './App.css'
 
-type EntryType = 'expense' | 'income'
-type LedgerEntry = { id: string; date: string; name: string; amount: number; type: EntryType; createdAt: string }
+import { BOC_SOURCE, isBocQuote, isQuoteStale, isLedgerEntry, normalizeEntries, recordedAmount } from './ledger'
+import type { BocQuote, Currency, EntryType, LedgerEntry } from './ledger'
 type LedgerRow = LedgerEntry & { balance: number }
 
 const STORAGE_KEY = 'ivan-meal-ledger-v1'
@@ -22,25 +22,27 @@ function todayISO() {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
 }
 
-function isLedgerEntry(value: unknown): value is LedgerEntry {
-  if (!value || typeof value !== 'object') return false
-  const item = value as Partial<LedgerEntry>
-  return Boolean(typeof item.id === 'string' && typeof item.date === 'string' && typeof item.name === 'string' && typeof item.amount === 'number' && (item.type === 'expense' || item.type === 'income'))
-}
-
 function loadEntries(): LedgerEntry[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(isLedgerEntry).map((entry, index) => ({
-      ...entry,
-      createdAt: typeof entry.createdAt === 'string' ? entry.createdAt : `${entry.date}T12:00:${String(index).padStart(2, '0')}`,
-    }))
+    return normalizeEntries(parsed.filter(isLedgerEntry))
   } catch { return [] }
 }
 
-function money(value: number) {
-  return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: Number.isInteger(value) ? 0 : 2 }).format(value)
+function money(value: number, currency: Currency = 'CNY') {
+  return new Intl.NumberFormat('zh-CN', { style: 'currency', currency, maximumFractionDigits: Number.isInteger(value) ? 0 : 2 }).format(value)
+}
+
+const QUOTE_KEY = 'ivan-meal-ledger-boc-hkd'
+function loadQuote(): BocQuote | null {
+  try {
+    const cached = JSON.parse(localStorage.getItem(QUOTE_KEY) || 'null')
+    return isBocQuote(cached) ? cached : null
+  } catch { return null }
+}
+function quoteTime(quote: BocQuote) {
+  return new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(quote.publishedAt))
 }
 
 function App() {
@@ -49,9 +51,42 @@ function App() {
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [type, setType] = useState<EntryType>('expense')
+  const [currency, setCurrency] = useState<Currency>('CNY')
+  const [quote, setQuote] = useState<BocQuote | null>(loadQuote)
+  const [rateLoading, setRateLoading] = useState(false)
+  const [rateError, setRateError] = useState(false)
+  const [acceptOldRate, setAcceptOldRate] = useState(false)
   const [filter, setFilter] = useState<'all' | EntryType>('all')
   const [message, setMessage] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
+
+  const staleRate = quote ? isQuoteStale(quote) : false
+  const canSave = currency === 'CNY' || (quote !== null && (!staleRate || acceptOldRate))
+
+  async function refreshQuote() {
+    setRateLoading(true)
+    setRateError(false)
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}boc-hkd.json`, { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
+      if (!response.ok) throw new Error('Rate unavailable')
+      const value: unknown = await response.json()
+      if (!isBocQuote(value)) throw new Error('Invalid rate')
+      // Never replace a newer cached quote with an older deployment snapshot.
+      const cached = loadQuote()
+      const latest = cached && Date.parse(cached.publishedAt) > Date.parse(value.publishedAt) ? cached : value
+      setQuote(latest)
+      setAcceptOldRate(false)
+      try { localStorage.setItem(QUOTE_KEY, JSON.stringify(latest)) } catch { /* still usable in memory */ }
+    } catch { setRateError(true) }
+    finally { setRateLoading(false) }
+  }
+
+  useEffect(() => {
+    void refreshQuote()
+    const onFocus = () => { void refreshQuote() }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
 
   const totals = useMemo(() => entries.reduce((result, entry) => {
     if (entry.type === 'income') result.income += entry.amount
@@ -74,10 +109,8 @@ function App() {
 
   const visibleRows = useMemo(() => rows.filter((entry) => filter === 'all' || entry.type === filter), [rows, filter])
   const amountPreview = useMemo(() => {
-    const parsed = Number(amount)
-    if (!Number.isFinite(parsed) || parsed <= 0) return null
-    return Math.round(type === 'expense' ? parsed / 2 : parsed)
-  }, [amount, type])
+    return recordedAmount(Number(amount), type, currency, quote)
+  }, [amount, type, currency, quote])
   const balancePreview = totals.balance + (amountPreview === null ? 0 : type === 'income' ? amountPreview : -amountPreview)
 
   function persist(next: LedgerEntry[]) {
@@ -100,12 +133,17 @@ function App() {
     const parsedAmount = Number(amount)
     if (!name.trim()) return showMessage('请填写名称')
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return showMessage('请输入正确的金额')
-    const recordedAmount = Math.round(type === 'expense' ? parsedAmount / 2 : parsedAmount)
+    if (!canSave) return showMessage('请先获取汇率或确认使用旧牌价')
+    const convertedAmount = recordedAmount(parsedAmount, type, currency, quote)
+    if (convertedAmount === null) return showMessage('金额过大或汇率不可用')
     const next: LedgerEntry = {
       id: crypto.randomUUID(),
       date: entryDate,
       name: name.trim(),
-      amount: recordedAmount,
+      amount: convertedAmount,
+      currency,
+      originalAmount: parsedAmount,
+      ...(currency === 'HKD' && quote ? { exchangeRate: { ...quote } } : {}),
       type,
       createdAt: new Date().toISOString(),
     }
@@ -125,7 +163,7 @@ function App() {
   }
 
   function exportBackup() {
-    const payload = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), entries }, null, 2)
+    const payload = JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), entries }, null, 2)
     const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }))
     const anchor = document.createElement('a')
     anchor.href = url; anchor.download = `饭钱备份-${todayISO()}.json`; anchor.click(); URL.revokeObjectURL(url)
@@ -139,7 +177,7 @@ function App() {
       const candidates = Array.isArray(parsed) ? parsed : (parsed.entries ?? parsed.records)
       if (!Array.isArray(candidates) || !candidates.every(isLedgerEntry)) throw new Error('invalid')
       if (entries.length && !window.confirm('导入会替换当前设备中的记录，继续吗？')) return
-      persist(candidates); showMessage(`已导入 ${candidates.length} 条记录`)
+      persist(normalizeEntries(candidates)); showMessage(`已导入 ${candidates.length} 条记录`)
     } catch { showMessage('备份文件无法识别') }
     finally { event.target.value = '' }
   }
@@ -153,7 +191,7 @@ function App() {
       <header className="page-header"><h1>饭钱账本</h1></header>
 
       <section className="summary-strip" aria-label="账本汇总">
-        <div className="balance-summary"><span>当前余额</span><strong className={totals.balance < 0 ? 'negative' : ''}>{money(totals.balance)}</strong></div>
+        <div className="balance-summary"><span>当前余额 · 人民币</span><strong className={totals.balance < 0 ? 'negative' : ''}>{money(totals.balance)}</strong></div>
         <div><span>累计花费</span><strong>{money(totals.expense)}</strong></div>
         <div><span>累计充值</span><strong>{money(totals.income)}</strong></div>
         <div><span>记录数量</span><strong>{entries.length} 笔</strong></div>
@@ -163,6 +201,27 @@ function App() {
         <div className="database-toolbar">
           <div><p className="view-label">Table</p><h2 id="database-title">全部记录</h2></div>
           <div className="filter-tabs"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>全部</button><button className={filter === 'expense' ? 'active' : ''} onClick={() => setFilter('expense')}>花费</button><button className={filter === 'income' ? 'active' : ''} onClick={() => setFilter('income')}>充值</button></div>
+        </div>
+
+        <div className="currency-panel">
+          <label className="currency-picker">本笔币种
+            <select aria-label="本笔币种" value={currency} onChange={(event) => { setCurrency(event.target.value as Currency); setAcceptOldRate(false) }}>
+              <option value="CNY">人民币 CNY</option><option value="HKD">港币 HKD</option>
+            </select>
+          </label>
+          <div className="currency-detail" aria-live="polite">
+            {currency === 'HKD' ? <>
+              <p><a href={BOC_SOURCE} target="_blank" rel="noreferrer">中国银行 · 现汇买入价</a>
+                {quote && <strong>1 港币 = {quote.rate.toFixed(4)} 人民币</strong>}
+                <button type="button" onClick={() => void refreshQuote()} disabled={rateLoading}>{rateLoading ? '读取中…' : '刷新汇率'}</button>
+              </p>
+              {quote ? <p>牌价时间：{quoteTime(quote)}（北京时间）。定时更新，保存时锁定此汇率；补记旧日期也采用此汇率。</p>
+                : <p className="rate-warning">{rateLoading ? '正在读取中行牌价…' : '暂时无法读取中行牌价，请联网后重试。人民币仍可正常记账。'}</p>}
+              {quote && rateError && <p className="rate-warning">刷新未成功，当前显示上次保存的牌价。</p>}
+              {quote && staleRate && <label className="rate-warning stale-confirm"><input type="checkbox" checked={acceptOldRate} onChange={(event) => setAcceptOldRate(event.target.checked)} />牌价已超过 48 小时或时间异常，我确认使用这条旧牌价</label>}
+            </> : <p>余额和汇总均为人民币。</p>}
+            {currency === 'HKD' && <p>先折人民币{type === 'expense' ? '，再两人平分' : ''}，入账四舍五入到元{amountPreview !== null ? `：本笔${type === 'expense' ? '扣除' : '充值'} ${money(amountPreview)}` : '。'}</p>}
+          </div>
         </div>
 
         <p className="mobile-hint">表格可以左右滑动查看完整内容</p>
@@ -185,13 +244,13 @@ function App() {
               </label>
               <label className="name-cell"><span className="sr-only">名称</span><input value={name} onChange={(event) => handleName(event.target.value)} placeholder="输入名称" autoComplete="off" /></label>
               <div className={`amount-cell ${type === 'expense' ? 'active expense' : ''}`}>
-                {type === 'expense' ? <><span>¥</span><input aria-label="花费总金额" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="总金额" inputMode="decimal" />{amountPreview !== null && <small>入账 {money(amountPreview)}</small>}</> : <button type="button" onClick={() => { setType('expense'); setAmount('') }}>＋ 记花费</button>}
+                {type === 'expense' ? <><span>{currency === 'HKD' ? 'HK$' : '¥'}</span><input aria-label="花费总金额" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="总金额" inputMode="decimal" />{amountPreview !== null && <small>入账 {money(amountPreview)}</small>}</> : <button type="button" onClick={() => { setType('expense'); setAmount('') }}>＋ 记花费</button>}
               </div>
               <div className={`amount-cell ${type === 'income' ? 'active income' : ''}`}>
-                {type === 'income' ? <><span>¥</span><input aria-label="充值金额" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="金额" inputMode="decimal" />{amountPreview !== null && <small>入账 {money(amountPreview)}</small>}</> : <button type="button" onClick={() => { setType('income'); setAmount('') }}>＋ 记充值</button>}
+                {type === 'income' ? <><span>{currency === 'HKD' ? 'HK$' : '¥'}</span><input aria-label="充值金额" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="金额" inputMode="decimal" />{amountPreview !== null && <small>入账 {money(amountPreview)}</small>}</> : <button type="button" onClick={() => { setType('income'); setAmount('') }}>＋ 记充值</button>}
               </div>
               <div className={`balance-cell preview ${balancePreview < 0 ? 'negative' : ''}`}>{money(balancePreview)}</div>
-              <button className="save-row" type="submit" aria-label="保存记录">{icons.plus}</button>
+              <button className="save-row" type="submit" disabled={!canSave} aria-label="保存记录">{icons.plus}</button>
             </form>
 
             {visibleRows.length ? <div className="ledger-body">{visibleRows.map((entry) => (
@@ -200,7 +259,10 @@ function App() {
                   <span className="sr-only">修改 {entry.name} 的日期</span>
                   <input type="date" value={entry.date} onChange={(event) => updateEntryDate(entry.id, event.target.value)} required />
                 </label>
-                <div className="name-cell"><strong>{entry.name}</strong></div>
+                <div className="name-cell saved-name"><strong>{entry.name}</strong>{entry.currency === 'HKD' && entry.exchangeRate && <>
+                  <small>港币{entry.type === 'expense' ? '总额' : '充值'} {money(entry.originalAmount!, 'HKD')} · 汇率 {entry.exchangeRate.rate.toFixed(4)}</small>
+                  <small>中行现汇买入 · {quoteTime(entry.exchangeRate)}</small>
+                </>}</div>
                 <div className="number-cell expense">{entry.type === 'expense' ? money(entry.amount) : ''}</div>
                 <div className="number-cell income">{entry.type === 'income' ? money(entry.amount) : ''}</div>
                 <div className={`balance-cell ${entry.balance < 0 ? 'negative' : ''}`}>{money(entry.balance)}</div>
@@ -217,7 +279,7 @@ function App() {
         <input ref={fileInput} type="file" accept="application/json,.json" onChange={importBackup} hidden />
       </section>
 
-      <footer>日期可调整 · 自动平分花费 · 自动计算余额</footer>
+      <footer>日期可调整 · 自动平分花费 · 人民币／港币记账</footer>
       {message && <div className="toast" role="status">{message}</div>}
     </main>
   )

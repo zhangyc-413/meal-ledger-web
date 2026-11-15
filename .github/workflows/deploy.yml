@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: '23 */6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -32,6 +34,10 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Test ledger and rate parser
+        run: pnpm test
+      - name: Refresh Bank of China HKD spot-buy quote
+        run: node scripts/update-boc-rate.mjs
       - name: Build site
         run: pnpm build
       - name: Configure Pages

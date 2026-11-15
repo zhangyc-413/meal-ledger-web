@@ -1,0 +1,8 @@
+{
+  "currency": "HKD",
+  "kind": "spot-buy",
+  "source": "https://www.boc.cn/sourcedb/whpj/",
+  "rate": 0.8489,
+  "publishedAt": "2026-11-15T10:30:00+08:00",
+  "fetchedAt": "2026-11-15T07:44:23.925Z"
+}
