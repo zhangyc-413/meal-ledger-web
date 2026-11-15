@@ -212,9 +212,8 @@ function App() {
             <p>
               {quote && <strong title={`牌价：${quoteTime(quote)}（北京时间）；按记账时牌价折算，已记账金额不变。`}>1 港币 = ¥{quote.rate.toFixed(4)}</strong>}
               <a href={BOC_SOURCE} target="_blank" rel="noreferrer" title="中国银行（中国内地）现汇买入价">中行买入价</a>
-              <button type="button" aria-label="刷新汇率" title="刷新汇率" onClick={() => void refreshQuote()} disabled={rateLoading}>↻</button>
             </p>
-            {!quote && <p className="rate-warning">{rateLoading ? '读取汇率中…' : '汇率读取失败，请重试'}</p>}
+            {!quote && <p className="rate-warning">{rateLoading ? '读取汇率中…' : '汇率暂不可用'}</p>}
             {quote && rateError && !staleRate && <p className="rate-warning">暂用上次牌价</p>}
             {quote && staleRate && <label className="rate-warning stale-confirm"><input type="checkbox" checked={acceptOldRate} onChange={(event) => setAcceptOldRate(event.target.checked)} />使用旧牌价（{quoteTime(quote)}）</label>}
           </div>}

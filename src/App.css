@@ -107,8 +107,6 @@ footer { padding: 25px 0 4px; color: #716e67; text-align: center; font-size: 11p
 .currency-detail p:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 12px; }
 .currency-detail a { color: #4f7257; text-underline-offset: 3px; }
 .currency-detail strong { color: #35342f; }
-.currency-detail button { border: 1px solid #d9d5cc; border-radius: 5px; padding: 3px 8px; color: #35342f; background: #fff; font: inherit; cursor: pointer; }
-.currency-detail button:disabled { opacity: .5; cursor: wait; }
 .rate-warning { color: #9b493a; }
 .stale-confirm { display: flex; gap: 6px; align-items: center; }
 .save-row:disabled { background: #aaa79f; cursor: not-allowed; }
