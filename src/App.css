@@ -97,8 +97,11 @@ footer { padding: 25px 0 4px; color: #716e67; text-align: center; font-size: 11p
 }
 
 .currency-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; padding: 0 20px 16px; }
-.currency-picker { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; color: #595750; font-size: 11px; }
-.currency-picker select { min-height: 36px; border: 1px solid #d9d5cc; border-radius: 6px; padding: 5px 10px; background: #fff; color: #35342f; font: inherit; font-size: 13px; }
+.currency-switch { display: inline-flex; flex: 0 0 auto; gap: 3px; padding: 3px; border-radius: 9px; background: #efede8; }
+.currency-switch button { min-width: 76px; min-height: 38px; padding: 7px 16px; border: 0; border-radius: 7px; background: transparent; color: #77746d; font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.currency-switch button:hover { color: #35342f; background: #e5e2db; }
+.currency-switch button[aria-pressed="true"] { color: #fff; background: #536f5a; box-shadow: 0 1px 4px rgba(35,34,31,.12); }
+.currency-switch button:focus-visible { outline: 2px solid #536f5a; outline-offset: 3px; }
 .currency-detail { padding-top: 2px; font-size: 11px; color: #706d65; line-height: 1.7; }
 .currency-detail p { margin: 0 0 4px; }
 .currency-detail p:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 12px; }
@@ -114,5 +117,4 @@ footer { padding: 25px 0 4px; color: #716e67; text-align: center; font-size: 11p
 .saved-name small { font-size: 10px; line-height: 1.5; color: #706d65; }
 @media (max-width: 760px) {
   .currency-panel { gap: 8px 16px; padding-left: 16px; padding-right: 16px; }
-  .currency-picker { gap: 8px; }
 }

@@ -204,11 +204,10 @@ function App() {
         </div>
 
         <div className="currency-panel">
-          <label className="currency-picker">本笔币种
-            <select aria-label="本笔币种" value={currency} onChange={(event) => { setCurrency(event.target.value as Currency); setAcceptOldRate(false) }}>
-              <option value="CNY">人民币 CNY</option><option value="HKD">港币 HKD</option>
-            </select>
-          </label>
+          <div className="currency-switch" role="group" aria-label="本笔币种">
+            <button type="button" aria-pressed={currency === 'CNY'} onClick={() => { setCurrency('CNY'); setAcceptOldRate(false) }}>人民币</button>
+            <button type="button" aria-pressed={currency === 'HKD'} onClick={() => { setCurrency('HKD'); setAcceptOldRate(false) }}>港币</button>
+          </div>
           {currency === 'HKD' && <div className="currency-detail" aria-live="polite">
             <p>
               {quote && <strong title={`牌价：${quoteTime(quote)}（北京时间）；按记账时牌价折算，已记账金额不变。`}>1 港币 = ¥{quote.rate.toFixed(4)}</strong>}
