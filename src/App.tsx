@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import './App.css'
 
-import { BOC_SOURCE, isBocQuote, isQuoteStale, isLedgerEntry, normalizeEntries, recordedAmount } from './ledger'
+import { isBocQuote, isQuoteStale, isLedgerEntry, normalizeEntries, recordedAmount } from './ledger'
 import type { BocQuote, Currency, EntryType, LedgerEntry } from './ledger'
 type LedgerRow = LedgerEntry & { balance: number }
 
@@ -208,11 +208,7 @@ function App() {
             <button type="button" aria-pressed={currency === 'CNY'} onClick={() => { setCurrency('CNY'); setAcceptOldRate(false) }}>人民币</button>
             <button type="button" aria-pressed={currency === 'HKD'} onClick={() => { setCurrency('HKD'); setAcceptOldRate(false) }}>港币</button>
           </div>
-          {currency === 'HKD' && <div className="currency-detail" aria-live="polite">
-            <p>
-              {quote && <strong title={`牌价：${quoteTime(quote)}（北京时间）；按记账时牌价折算，已记账金额不变。`}>1 港币 = ¥{quote.rate.toFixed(4)}</strong>}
-              <a href={BOC_SOURCE} target="_blank" rel="noreferrer" title="中国银行（中国内地）现汇买入价">中行买入价</a>
-            </p>
+          {currency === 'HKD' && (!quote || rateError || staleRate) && <div className="currency-detail" aria-live="polite">
             {!quote && <p className="rate-warning">{rateLoading ? '读取汇率中…' : '汇率暂不可用'}</p>}
             {quote && rateError && !staleRate && <p className="rate-warning">暂用上次牌价</p>}
             {quote && staleRate && <label className="rate-warning stale-confirm"><input type="checkbox" checked={acceptOldRate} onChange={(event) => setAcceptOldRate(event.target.checked)} />使用旧牌价（{quoteTime(quote)}）</label>}
@@ -254,9 +250,7 @@ function App() {
                   <span className="sr-only">修改 {entry.name} 的日期</span>
                   <input type="date" value={entry.date} onChange={(event) => updateEntryDate(entry.id, event.target.value)} required />
                 </label>
-                <div className="name-cell saved-name"><strong>{entry.name}</strong>{entry.currency === 'HKD' && entry.exchangeRate && <>
-                  <small title={`中行现汇买入价 ${entry.exchangeRate.rate.toFixed(4)} · ${quoteTime(entry.exchangeRate)}`}>{entry.type === 'expense' ? '总额 ' : ''}{money(entry.originalAmount!, 'HKD')}</small>
-                </>}</div>
+                <div className="name-cell"><strong>{entry.name}</strong></div>
                 <div className="number-cell expense">{entry.type === 'expense' ? money(entry.amount) : ''}</div>
                 <div className="number-cell income">{entry.type === 'income' ? money(entry.amount) : ''}</div>
                 <div className={`balance-cell ${entry.balance < 0 ? 'negative' : ''}`}>{money(entry.balance)}</div>

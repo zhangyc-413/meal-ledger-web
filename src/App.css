@@ -104,15 +104,9 @@ footer { padding: 25px 0 4px; color: #716e67; text-align: center; font-size: 11p
 .currency-switch button:focus-visible { outline: 2px solid #536f5a; outline-offset: 3px; }
 .currency-detail { padding-top: 2px; font-size: 11px; color: #706d65; line-height: 1.7; }
 .currency-detail p { margin: 0 0 4px; }
-.currency-detail p:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 12px; }
-.currency-detail a { color: #4f7257; text-underline-offset: 3px; }
-.currency-detail strong { color: #35342f; }
 .rate-warning { color: #9b493a; }
 .stale-confirm { display: flex; gap: 6px; align-items: center; }
 .save-row:disabled { background: #aaa79f; cursor: not-allowed; }
-.saved-name { flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; padding-top: 9px; padding-bottom: 9px; }
-.saved-name strong { max-width: 100%; }
-.saved-name small { font-size: 10px; line-height: 1.5; color: #706d65; }
 @media (max-width: 760px) {
   .currency-panel { gap: 8px 16px; padding-left: 16px; padding-right: 16px; }
 }
