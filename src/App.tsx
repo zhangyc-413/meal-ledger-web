@@ -191,7 +191,7 @@ function App() {
       <header className="page-header"><h1>饭钱账本</h1></header>
 
       <section className="summary-strip" aria-label="账本汇总">
-        <div className="balance-summary"><span>当前余额 · 人民币</span><strong className={totals.balance < 0 ? 'negative' : ''}>{money(totals.balance)}</strong></div>
+        <div className="balance-summary"><span>当前余额</span><strong className={totals.balance < 0 ? 'negative' : ''}>{money(totals.balance)}</strong></div>
         <div><span>累计花费</span><strong>{money(totals.expense)}</strong></div>
         <div><span>累计充值</span><strong>{money(totals.income)}</strong></div>
         <div><span>记录数量</span><strong>{entries.length} 笔</strong></div>
@@ -209,19 +209,16 @@ function App() {
               <option value="CNY">人民币 CNY</option><option value="HKD">港币 HKD</option>
             </select>
           </label>
-          <div className="currency-detail" aria-live="polite">
-            {currency === 'HKD' ? <>
-              <p><a href={BOC_SOURCE} target="_blank" rel="noreferrer">中国银行 · 现汇买入价</a>
-                {quote && <strong>1 港币 = {quote.rate.toFixed(4)} 人民币</strong>}
-                <button type="button" onClick={() => void refreshQuote()} disabled={rateLoading}>{rateLoading ? '读取中…' : '刷新汇率'}</button>
-              </p>
-              {quote ? <p>牌价时间：{quoteTime(quote)}（北京时间）。定时更新，保存时锁定此汇率；补记旧日期也采用此汇率。</p>
-                : <p className="rate-warning">{rateLoading ? '正在读取中行牌价…' : '暂时无法读取中行牌价，请联网后重试。人民币仍可正常记账。'}</p>}
-              {quote && rateError && <p className="rate-warning">刷新未成功，当前显示上次保存的牌价。</p>}
-              {quote && staleRate && <label className="rate-warning stale-confirm"><input type="checkbox" checked={acceptOldRate} onChange={(event) => setAcceptOldRate(event.target.checked)} />牌价已超过 48 小时或时间异常，我确认使用这条旧牌价</label>}
-            </> : <p>余额和汇总均为人民币。</p>}
-            {currency === 'HKD' && <p>先折人民币{type === 'expense' ? '，再两人平分' : ''}，入账四舍五入到元{amountPreview !== null ? `：本笔${type === 'expense' ? '扣除' : '充值'} ${money(amountPreview)}` : '。'}</p>}
-          </div>
+          {currency === 'HKD' && <div className="currency-detail" aria-live="polite">
+            <p>
+              {quote && <strong title={`牌价：${quoteTime(quote)}（北京时间）；按记账时牌价折算，已记账金额不变。`}>1 港币 = ¥{quote.rate.toFixed(4)}</strong>}
+              <a href={BOC_SOURCE} target="_blank" rel="noreferrer" title="中国银行（中国内地）现汇买入价">中行买入价</a>
+              <button type="button" aria-label="刷新汇率" title="刷新汇率" onClick={() => void refreshQuote()} disabled={rateLoading}>↻</button>
+            </p>
+            {!quote && <p className="rate-warning">{rateLoading ? '读取汇率中…' : '汇率读取失败，请重试'}</p>}
+            {quote && rateError && !staleRate && <p className="rate-warning">暂用上次牌价</p>}
+            {quote && staleRate && <label className="rate-warning stale-confirm"><input type="checkbox" checked={acceptOldRate} onChange={(event) => setAcceptOldRate(event.target.checked)} />使用旧牌价（{quoteTime(quote)}）</label>}
+          </div>}
         </div>
 
         <p className="mobile-hint">表格可以左右滑动查看完整内容</p>
@@ -260,8 +257,7 @@ function App() {
                   <input type="date" value={entry.date} onChange={(event) => updateEntryDate(entry.id, event.target.value)} required />
                 </label>
                 <div className="name-cell saved-name"><strong>{entry.name}</strong>{entry.currency === 'HKD' && entry.exchangeRate && <>
-                  <small>港币{entry.type === 'expense' ? '总额' : '充值'} {money(entry.originalAmount!, 'HKD')} · 汇率 {entry.exchangeRate.rate.toFixed(4)}</small>
-                  <small>中行现汇买入 · {quoteTime(entry.exchangeRate)}</small>
+                  <small title={`中行现汇买入价 ${entry.exchangeRate.rate.toFixed(4)} · ${quoteTime(entry.exchangeRate)}`}>{entry.type === 'expense' ? '总额 ' : ''}{money(entry.originalAmount!, 'HKD')}</small>
                 </>}</div>
                 <div className="number-cell expense">{entry.type === 'expense' ? money(entry.amount) : ''}</div>
                 <div className="number-cell income">{entry.type === 'income' ? money(entry.amount) : ''}</div>
@@ -279,7 +275,7 @@ function App() {
         <input ref={fileInput} type="file" accept="application/json,.json" onChange={importBackup} hidden />
       </section>
 
-      <footer>日期可调整 · 自动平分花费 · 人民币／港币记账</footer>
+      <footer>日期可调整 · 自动平分花费 · 自动计算余额</footer>
       {message && <div className="toast" role="status">{message}</div>}
     </main>
   )

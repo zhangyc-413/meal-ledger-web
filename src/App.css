@@ -96,8 +96,8 @@ footer { padding: 25px 0 4px; color: #716e67; text-align: center; font-size: 11p
   .summary-strip .balance-summary strong { font-size: 21px; }
 }
 
-.currency-panel { display: flex; align-items: flex-start; gap: 18px; padding: 0 20px 16px; }
-.currency-picker { display: flex; flex: 0 0 auto; flex-direction: column; gap: 6px; color: #595750; font-size: 11px; }
+.currency-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; padding: 0 20px 16px; }
+.currency-picker { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; color: #595750; font-size: 11px; }
 .currency-picker select { min-height: 36px; border: 1px solid #d9d5cc; border-radius: 6px; padding: 5px 10px; background: #fff; color: #35342f; font: inherit; font-size: 13px; }
 .currency-detail { padding-top: 2px; font-size: 11px; color: #706d65; line-height: 1.7; }
 .currency-detail p { margin: 0 0 4px; }
@@ -113,6 +113,6 @@ footer { padding: 25px 0 4px; color: #716e67; text-align: center; font-size: 11p
 .saved-name strong { max-width: 100%; }
 .saved-name small { font-size: 10px; line-height: 1.5; color: #706d65; }
 @media (max-width: 760px) {
-  .currency-panel { flex-direction: column; gap: 10px; padding-left: 16px; padding-right: 16px; }
-  .currency-picker { flex-direction: row; align-items: center; gap: 10px; }
+  .currency-panel { gap: 8px 16px; padding-left: 16px; padding-right: 16px; }
+  .currency-picker { gap: 8px; }
 }
